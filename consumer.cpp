@@ -24,7 +24,7 @@ typedef struct {
     sem_t full;
 } Shared_Data;
 
-bool initialize_shm_consumer(Shared_Data * shared_data,int N){
+bool initialize_shm(Shared_Data * shared_data,int N){
     shared_data->initialized = 0;
     shared_data->in =0;
     shared_data->out =0;
@@ -61,15 +61,16 @@ int main(int argc, char *argv[]){
         if(errno == EEXIST){
             is_new = false;
             fd = shm_open("/my_shm",O_RDWR, 0666);
+            
             if (fd == -1) {
             perror("shm_open");
-            return 1;
+            return 1;}
+
         }else{
         std::cerr << "Failed to create shared memory." << std::endl;
         return 1;
         }
     }
-
     size_t size_of_shm = sizeof(Shared_Data)+ N *sizeof(Price_Update);
 
     if(is_new){
@@ -91,6 +92,7 @@ int main(int argc, char *argv[]){
     void *ptr = mmap(NULL, size_of_shm, PROT_READ | PROT_WRITE ,MAP_SHARED,fd,0);
     if(ptr == MAP_FAILED){
         std::cerr << "Failed to map shared memory." << std::endl;
+        close(fd);
         return 1;
     }
     if (close(fd) == -1) {
@@ -98,13 +100,19 @@ int main(int argc, char *argv[]){
     }
     Shared_Data *shared_data = (Shared_Data *)ptr;
 
-    if(is_new){
-        if(!initialize_shm_consumer(shared_data, N)){
+    if (is_new){  
+        if(!initialize_shm(shared_data, N)){
             munmap(ptr, size_of_shm);
             std::cerr << "Failed to initialize shared memory." << std::endl;
             return 1;
         }
-    }
+      }
+      else{
+            while(__atomic_load_n(&shared_data->initialized, __ATOMIC_ACQUIRE) == 0){
+                // wait for initialization to complete
+                usleep(10000); // sleep for 10ms
+            }
+        }
     //getting actual buffer address
     Price_Update *buffer =(Price_Update*)((char*)ptr +sizeof(Shared_Data));
 
