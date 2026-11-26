@@ -126,4 +126,21 @@ int main(int argc, char *argv[]){
     //getting actual buffer address
     Price_Update *buffer =(Price_Update*)((char*)ptr +sizeof(Shared_Data));
 
+    while(true){
+        sem_wait(&shared_data->full);
+        sem_wait(&shared_data->mutex);
+
+        // REad from buffer
+        Price_Update item = buffer[shared_data->out];
+        shared_data->out = (shared_data->out +1) % shared_data->buffersize;
+
+        sem_post(&shared_data->mutex);
+        sem_post(&shared_data->empty);
+
+        // Display received item (temporary test)
+    std::cout << "Received: "
+              << item.commodity << " = "
+              << item.price << std::endl;
+    }
+
 }
