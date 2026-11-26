@@ -154,17 +154,7 @@ int main(int argc,char * argv[]){
                 // wait for initialization to complete
                 usleep(10000); // sleep for 10ms
             }
-        }
-
-        if (shared_data->buffersize != N) {
-                std::cerr << "Buffer size mismatch. "
-              << "Requested N = " << N
-              << ", Existing buffer size = "
-              << shared_data->buffersize << std::endl;
-
-                munmap(ptr, size_of_shm);
-                return 1;
-        }   
+        }  
 
         //getting actual buffer address
     Price_Update *buffer =(Price_Update*)((char*)ptr +sizeof(Shared_Data));
