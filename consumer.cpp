@@ -87,7 +87,7 @@ int main(int argc, char *argv[]){
             close(fd);
             return 1;
         }
-        if (shm_stat.st_size == size_of_shm) {
+        if (static_cast<size_t>(shm_stat.st_size) == size_of_shm) {
            size_ready = true;
            break;
         }
