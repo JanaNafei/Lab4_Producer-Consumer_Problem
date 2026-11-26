@@ -62,13 +62,13 @@ const char* commodities[NUM_COMMODITIES] = {
 
 };
 
-void display_dashboard(double current_prices[],double prices_history[][5], int history_count[]){
+void display_dashboard(double current_prices[],double prices_history[][5], int history_count[], const char* arrow_prices[], const char* arrow_avg[]){
     printf("\e[1;1H\e[2J");
 
-    printf("+------------------+---------+-----------+\n");
-    printf("| %-16s | %7s | %9s |\n",
+    printf("+------------------+------------+-------------+\n");
+    printf("| %-16s | %10s | %9s |\n",
            "Currency", "Price", "AvgPrice");
-    printf("+------------------+---------+-----------+\n");
+    printf("+------------------+------------+-------------+\n");
 
     for(int i = 0; i < NUM_COMMODITIES; i++){
         double sum =0.0;
@@ -81,12 +81,39 @@ void display_dashboard(double current_prices[],double prices_history[][5], int h
             avg = sum /history_count[i];
         }
 
+        const char* price_color = "\033[0m";
+        const char* avg_color = "\033[0m";
 
-        printf("| %-16s | %7.2lf | %9.2lf |\n",
-               commodities[i], current_prices[i], avg);
+        if(strcmp(arrow_prices[i], "↑") == 0){
+            price_color ="\033[32m"; 
+
+        }else if(strcmp(arrow_prices[i], "↓") == 0){
+            price_color ="\033[31m";
+        }else if(strcmp(arrow_prices[i], "=") == 0){
+            price_color ="\033[33m";
+        }
+
+        if(strcmp(arrow_avg[i], "↑") == 0){
+            avg_color ="\033[32m"; 
+
+        }else if(strcmp(arrow_avg[i], "↓") == 0){
+            avg_color ="\033[31m";
+        }else if(strcmp(arrow_avg[i], "=") == 0){
+            avg_color ="\033[33m";
+        }
+
+
+        printf("| %-16s | %s%7.2lf %-2s\033[0m | %s%7.2lf %-2s\033[0m |\n",
+       commodities[i],
+       price_color,
+       current_prices[i],
+       arrow_prices[i],
+       avg_color,
+       avg,
+       arrow_avg[i]);
     }
 
-    printf("+------------------+---------+-----------+\n");
+    printf("+------------------+------------+-------------+\n");
 
     fflush(stdout);
 
@@ -171,16 +198,29 @@ int main(int argc, char *argv[]){
                 usleep(10000); // sleep for 10ms
             }
         }
-        
+
     //getting actual buffer address
     Price_Update *buffer =(Price_Update*)((char*)ptr +sizeof(Shared_Data));
     
     //Consumer's job
 
-    double current_prices[NUM_COMMODITIES] = {0};
-    double prices_history[NUM_COMMODITIES][5] ={0};
-    int history_count[NUM_COMMODITIES] = {0};
-    int history_next[NUM_COMMODITIES] = {0};
+    // helper arrays
+    double current_prices[NUM_COMMODITIES] = {0}; // -> tracks current price of evey commodity
+    double prices_history[NUM_COMMODITIES][5] ={0}; // -> (2D) previous 5 prices of every commodity (including the current price)
+    int history_count[NUM_COMMODITIES] = {0}; // -> tracks the number of price changes recieved for each
+    int history_next[NUM_COMMODITIES] = {0}; // -> next index to write on the prices_history array for this commodity (circular buffer)
+    // For arrows
+    const char* arrow_prices[NUM_COMMODITIES];
+    bool price_initial[NUM_COMMODITIES] = {false};
+
+    const char* arrow_avg[NUM_COMMODITIES];
+    bool avg_initial[NUM_COMMODITIES] = {false};
+    double previous_avg[NUM_COMMODITIES] = {0};
+
+    for(int i = 0; i < NUM_COMMODITIES; i++){
+    arrow_prices[i] = "";
+    arrow_avg[i] = "";
+    }
 
     while(true){
         sem_wait(&shared_data->full);
@@ -195,6 +235,18 @@ int main(int argc, char *argv[]){
 
         for(int i=0; i<NUM_COMMODITIES; i++){
             if(strcmp(item.commodity, commodities[i])==0){
+                
+                if(!price_initial[i]){
+                    arrow_prices[i]="";
+                    price_initial[i]=true;
+                }else if(item.price > current_prices[i]){
+                    arrow_prices[i] = "↑";
+                }else if(item.price < current_prices[i]){
+                    arrow_prices[i] = "↓";
+                }else{
+                    arrow_prices[i] = "=";
+                }
+
                 current_prices[i] = item.price;
 
                 prices_history[i][history_next[i]] = item.price;
@@ -203,15 +255,29 @@ int main(int argc, char *argv[]){
                     history_count[i]++;
                 }
 
+                    double sum =0.0;
+                    for(int j=0; j<history_count[i];j++){
+                       sum += prices_history[i][j];
+                    }
+                    double avg = sum / history_count[i];
+
+                    if(!avg_initial[i]){
+                        arrow_avg[i] = "";
+                        avg_initial[i] = true;
+                    }else if(avg > previous_avg[i]){
+                        arrow_avg[i] = "↑";
+                    }else if(avg < previous_avg[i]){
+                        arrow_avg[i] = "↓";
+                    }else{
+                        arrow_avg[i] = "=";
+                    }
+                    previous_avg[i] = avg;
+
                 break;
             }
         }
-        // Display received item (temporary test)
-    //std::cout << "Received: "
-     //         << item.commodity << " = "
-      //        << item.price << std::endl;
         
-        display_dashboard(current_prices,prices_history,history_count);
+        display_dashboard(current_prices,prices_history,history_count,arrow_prices,arrow_avg);
 
     }
 
