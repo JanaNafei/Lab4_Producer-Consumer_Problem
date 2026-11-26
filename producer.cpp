@@ -12,6 +12,8 @@
 #include <ctime>
 #include <iomanip>
 
+
+
 typedef struct {
     char commodity[11];
     double price;
@@ -60,6 +62,7 @@ void print_timestamp(){
               << ts.tv_nsec / 1000000
               << "] ";
 }
+
 
 int main(int argc,char * argv[]){
         if(argc != 6){
@@ -154,7 +157,7 @@ int main(int argc,char * argv[]){
         }
 
         if (shared_data->buffersize != N) {
-                std::cerr << "Buffer size mismatch! "
+                std::cerr << "Buffer size mismatch. "
               << "Requested N = " << N
               << ", Existing buffer size = "
               << shared_data->buffersize << std::endl;

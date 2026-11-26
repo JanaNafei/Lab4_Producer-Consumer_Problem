@@ -9,6 +9,8 @@
 # include <cerrno>
 # include <cstdio>
 
+#define NUM_COMMODITIES 11
+
 typedef struct {
     char commodity[11];
     double price;
@@ -44,6 +46,52 @@ bool initialize_shm(Shared_Data * shared_data,int N){
     __atomic_store_n(&shared_data->initialized, 1, __ATOMIC_RELEASE); // ensures no producer will see that initialized is 1 before consumer fifnish initializing
     return true;
 }
+
+const char* commodities[NUM_COMMODITIES] = {
+    "ALUMINIUM",
+    "COPPER",
+    "COTTON",
+    "CRUDEOIL",
+    "GOLD",
+    "LEAD",
+    "MENTHAOIL",
+    "NATURALGAS",
+    "NICKEL",
+    "SILVER",
+    "ZINC"
+
+};
+
+void display_dashboard(double current_prices[],double prices_history[][5], int history_count[]){
+    printf("\e[1;1H\e[2J");
+
+    printf("+------------------+---------+-----------+\n");
+    printf("| %-16s | %7s | %9s |\n",
+           "Currency", "Price", "AvgPrice");
+    printf("+------------------+---------+-----------+\n");
+
+    for(int i = 0; i < NUM_COMMODITIES; i++){
+        double sum =0.0;
+        for(int j=0; j<history_count[i];j++){
+            sum += prices_history[i][j];
+        }
+
+        double avg = 0.0;
+        if(history_count[i] >0){
+            avg = sum /history_count[i];
+        }
+
+
+        printf("| %-16s | %7.2lf | %9.2lf |\n",
+               commodities[i], current_prices[i], avg);
+    }
+
+    printf("+------------------+---------+-----------+\n");
+
+    fflush(stdout);
+
+}
+
 int main(int argc, char *argv[]){
     if(argc != 2){
         std::cerr << "Usage: " << argv[0] << " <buffer_size>" << std::endl;
@@ -123,8 +171,26 @@ int main(int argc, char *argv[]){
                 usleep(10000); // sleep for 10ms
             }
         }
+
+
+         if (shared_data->buffersize != N) {
+                std::cerr << "Buffer size mismatch."
+              << "Requested N = " << N
+              << ", Existing buffer size = "
+              << shared_data->buffersize << std::endl;
+
+                munmap(ptr, size_of_shm);
+                return 1;
+        } 
     //getting actual buffer address
     Price_Update *buffer =(Price_Update*)((char*)ptr +sizeof(Shared_Data));
+    
+    //Consumer's job
+
+    double current_prices[NUM_COMMODITIES] = {0};
+    double prices_history[NUM_COMMODITIES][5] ={0};
+    int history_count[NUM_COMMODITIES] = {0};
+    int history_next[NUM_COMMODITIES] = {0};
 
     while(true){
         sem_wait(&shared_data->full);
@@ -137,10 +203,26 @@ int main(int argc, char *argv[]){
         sem_post(&shared_data->mutex);
         sem_post(&shared_data->empty);
 
+        for(int i=0; i<NUM_COMMODITIES; i++){
+            if(strcmp(item.commodity, commodities[i])==0){
+                current_prices[i] = item.price;
+
+                prices_history[i][history_next[i]] = item.price;
+                history_next[i] = (history_next[i] + 1) % 5;
+                if(history_count[i] < 5){
+                    history_count[i]++;
+                }
+
+                break;
+            }
+        }
         // Display received item (temporary test)
-    std::cout << "Received: "
-              << item.commodity << " = "
-              << item.price << std::endl;
+    //std::cout << "Received: "
+     //         << item.commodity << " = "
+      //        << item.price << std::endl;
+        
+        display_dashboard(current_prices,prices_history,history_count);
+
     }
 
 }
