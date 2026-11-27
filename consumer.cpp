@@ -62,7 +62,7 @@ const char* commodities[NUM_COMMODITIES] = {
 
 };
 
-void display_dashboard(double current_prices[],double prices_history[][5], int history_count[], const char* arrow_prices[], const char* arrow_avg[]){
+void display_dashboard(double current_prices[],double prices_history[][5], int history_count[], const char* arrow_prices[], const char* arrow_avg[],bool avg_initial[],double previous_avg[]){
     printf("\e[1;1H\e[2J");
 
     printf("+------------------+------------+-------------+\n");
@@ -80,6 +80,22 @@ void display_dashboard(double current_prices[],double prices_history[][5], int h
         if(history_count[i] >0){
             avg = sum /history_count[i];
         }
+
+        if(history_count[i]>0){ 
+            if(!avg_initial[i]){
+                        arrow_avg[i] = "";
+                        avg_initial[i] = true;
+                    }else if(avg > previous_avg[i]){
+                        arrow_avg[i] = "↑";
+                    }else if(avg < previous_avg[i]){
+                        arrow_avg[i] = "↓";
+                    }else{
+                        arrow_avg[i] = "=";
+                    }
+                    previous_avg[i] = avg;
+        }
+
+
 
         const char* price_color = "\033[0m";
         const char* avg_color = "\033[0m";
@@ -254,30 +270,12 @@ int main(int argc, char *argv[]){
                 if(history_count[i] < 5){
                     history_count[i]++;
                 }
-
-                    double sum =0.0;
-                    for(int j=0; j<history_count[i];j++){
-                       sum += prices_history[i][j];
-                    }
-                    double avg = sum / history_count[i];
-
-                    if(!avg_initial[i]){
-                        arrow_avg[i] = "";
-                        avg_initial[i] = true;
-                    }else if(avg > previous_avg[i]){
-                        arrow_avg[i] = "↑";
-                    }else if(avg < previous_avg[i]){
-                        arrow_avg[i] = "↓";
-                    }else{
-                        arrow_avg[i] = "=";
-                    }
-                    previous_avg[i] = avg;
-
+                    
                 break;
             }
         }
         
-        display_dashboard(current_prices,prices_history,history_count,arrow_prices,arrow_avg);
+        display_dashboard(current_prices,prices_history,history_count,arrow_prices,arrow_avg,avg_initial,previous_avg);
 
     }
 
