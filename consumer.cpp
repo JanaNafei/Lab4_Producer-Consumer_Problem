@@ -212,25 +212,7 @@ int main(int argc, char *argv[]){
         return 1;
     }
     }
-         struct stat shm_stat;
-    bool size_ready = false;
-    for (int i = 0; i < 100; i++) {
-        if (fstat(fd, &shm_stat) == -1) {
-            perror("fstat");
-            close(fd);
-            return 1;
-        }
-        if (static_cast<size_t>(shm_stat.st_size) == size_of_shm) {
-           size_ready = true;
-           break;
-        }
-
-        usleep(10000); 
-    }
-    if (!size_ready) {
-        std::cerr << "Shared memory size is not set correctly." << std::endl;
-        close(fd);
-        return 1;}
+         
 
     void *ptr = mmap(NULL, size_of_shm, PROT_READ | PROT_WRITE ,MAP_SHARED,fd,0);
     if(ptr == MAP_FAILED){
