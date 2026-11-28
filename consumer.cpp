@@ -241,8 +241,6 @@ int main(int argc, char *argv[]){
             }
         }
 
-
-
         if(stop){
             munmap(ptr,size_of_shm);
             return 0;
