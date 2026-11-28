@@ -240,10 +240,18 @@ int main(int argc, char *argv[]){
                 usleep(10000); 
             }
         }
+
+
+
         if(stop){
             munmap(ptr,size_of_shm);
             return 0;
         }
+
+        if(N!=shared_data->buffersize)
+        {std::cerr << "Buffer size mismatch! All processes must use the same buffer size."<< std::endl;
+                munmap(ptr, size_of_shm);
+                return 1;}
 
         if(!wait_semaphore(&shared_data->mutex)){
             munmap(ptr,size_of_shm);
