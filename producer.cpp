@@ -84,7 +84,7 @@ int main(int argc,char * argv[]){
     int sleep_interval = std::atoi(argv[4]);
     int N = std::atoi(argv[5]);
 
-    if(strlen(commodity)>10|| stddev<0|| sleep_interval<=0|| N<=0){
+    if(strlen(commodity)>10||mean<0 ||stddev<0|| sleep_interval<=0|| N<=0){
         
         std::cerr << "Invalid arguments." << std::endl;
         return 1;
