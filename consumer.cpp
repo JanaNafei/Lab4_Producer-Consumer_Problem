@@ -4,7 +4,6 @@
 # include <unistd.h>
 # include <fcntl.h>     // for flags
 # include <sys/mman.h>  // for mmap and shm_open
-# include <sys/stat.h> // for file permissions
 # include <cstdlib>
 # include <cerrno>
 # include <cstdio>
@@ -32,27 +31,6 @@ typedef struct {
 
 void signal_handler(int signal){
     stop=1;
-}
-bool initialize_shm(Shared_Data * shared_data,int N){
-    shared_data->initialized = 0;
-    shared_data->in =0;
-    shared_data->out =0;
-    shared_data->active_processes=0;
-    shared_data->buffersize = N;
-    if(sem_init(&shared_data->mutex,1,1)== -1){
-        perror("sem_init mutex");
-        return false;
-    }
-    if(sem_init(&shared_data->empty,1,N)== -1){
-        perror("sem_init empty");
-        return false;
-    }
-    if(sem_init(&shared_data->full,1,0)== -1){
-        perror("sem_init full");
-        return false;
-    }
-    __atomic_store_n(&shared_data->initialized, 1, __ATOMIC_RELEASE); // ensures no producer will see that initialized is 1 before consumer fifnish initializing
-    return true;
 }
 
 bool wait_semaphore(sem_t *sem){
@@ -226,14 +204,38 @@ int main(int argc, char *argv[]){
     Shared_Data *shared_data = (Shared_Data *)ptr;
 
     if (is_new){  
-        if(!initialize_shm(shared_data, N)){
+
+        bool done=true;
+        shared_data->initialized = 0;
+    shared_data->in =0;
+    shared_data->out =0;
+    shared_data->active_processes=0;
+    shared_data->buffersize = N;
+    if(sem_init(&shared_data->mutex,1,1)== -1){
+        perror("sem_init mutex");
+        done=false;
+    }
+    if(done && sem_init(&shared_data->empty,1,N)== -1){
+        perror("sem_init empty");
+        done=false;
+    }
+    if(done && sem_init(&shared_data->full,1,0)== -1){
+        perror("sem_init full");
+        done= false;
+    }
+    if(done){
+    shared_data->initialized= 1; }
+    
+
+        if(!done){
             munmap(ptr, size_of_shm);
             std::cerr << "Failed to initialize shared memory." << std::endl;
+            shm_unlink("/my_shm");
             return 1;
         }
       }
       else{
-            while(!stop &&__atomic_load_n(&shared_data->initialized, __ATOMIC_ACQUIRE) == 0){
+            while(!stop && shared_data->initialized == 0){
                 // wait for initialization to complete
                 usleep(10000); 
             }
