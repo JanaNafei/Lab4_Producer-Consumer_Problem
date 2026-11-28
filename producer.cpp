@@ -4,7 +4,6 @@
 # include <unistd.h>
 # include <fcntl.h>     // for flags
 # include <sys/mman.h>  // for mmap and shm_open
-# include <sys/stat.h> // for file permissions
 # include <cstdlib>
 # include <cerrno>
 # include <cstdio>
