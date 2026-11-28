@@ -90,11 +90,7 @@ void print_timestamp(){
 
     struct tm *time_info = localtime(&ts.tv_sec);
 
-    std::cerr << "[" 
-              << std::put_time(time_info, "%m/%d/%Y %H:%M:%S")
-              << "." << std::setw(3) << std::setfill('0')
-              << ts.tv_nsec / 1000000
-              << "] ";
+    std::cerr << std::put_time(time_info, "%m/%d/%Y %H:%M:%S")<< "." << std::setw(3) << std::setfill('0') << ts.tv_nsec / 1000000;
 }
 
 
@@ -202,14 +198,14 @@ int main(int argc,char * argv[]){
         while(!stop){
             double price = distribution(gen);
             print_timestamp();
-            std::cerr << commodity << ": generating a new value " << price << std::endl;
+            std::cerr << " "<<commodity << ": generating a new value " << price << std::endl;
 
             if(!wait_semaphore(&shared_data->empty)){
             break;
             }
 
             print_timestamp();
-            std::cerr << commodity << ": trying to get mutex on the shared buffer "<< std::endl;
+            std::cerr << " "<< commodity << ": trying to get mutex on the shared buffer "<< std::endl;
             if(!wait_semaphore(&shared_data->mutex)){
                 sem_post(&shared_data->empty);
                 break;
@@ -223,7 +219,7 @@ int main(int argc,char * argv[]){
             //Adding price to buffer
 
             print_timestamp();
-            std::cerr << commodity << ": placing " << price << " on the shared buffer "<< std::endl;
+            std::cerr << " "<< commodity << ": placing " << price << " on the shared buffer "<< std::endl;
             strcpy(buffer[shared_data->in].commodity, commodity);
             buffer[shared_data->in].price = price;
             shared_data->in = (shared_data->in +1) % shared_data->buffersize;
@@ -231,10 +227,10 @@ int main(int argc,char * argv[]){
             sem_post(&shared_data->mutex);
             sem_post(&shared_data->full);
             print_timestamp();
-            std::cerr << commodity<<": Produced with price "<< price<< " succesfully"<< std::endl;
+            std::cerr << " "<< commodity<<": Produced with price "<< price<< " succesfully"<< std::endl;
 
             print_timestamp();
-            std::cerr<< commodity <<": sleeping for "<< sleep_interval << " ms" << std::endl;
+            std::cerr<< " "<< commodity <<": sleeping for "<< sleep_interval << " ms" << std::endl;
             usleep(sleep_interval *1000);
         }
 
