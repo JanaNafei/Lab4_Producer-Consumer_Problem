@@ -11,8 +11,9 @@
 #include <random>
 #include <ctime>
 #include <iomanip>
+#include <csignal>
 
-
+volatile sig_atomic_t stop =0;
 
 typedef struct {
     char commodity[11];
@@ -28,6 +29,25 @@ typedef struct {
     sem_t empty;
     sem_t full;
 } Shared_Data;
+
+void signal_handler(int signal){
+    stop=1;
+}
+
+bool wait_semaphore(sem_t *sem){
+    while(sem_wait(sem)==-1){
+        if(errno==EINTR){
+            if(stop){
+                return false;
+            }
+            continue;
+        }
+
+        perror("sem_wait");
+        return false;
+    }
+     return true;
+}
 
 bool initialize_shm(Shared_Data * shared_data,int N){
     shared_data->initialized = 0;
@@ -83,6 +103,12 @@ int main(int argc,char * argv[]){
         return 1;
     }
 
+    struct sigaction sa ={};
+    sa.sa_handler= signal_handler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    sigaction(SIGINT,&sa,NULL);
+    sigaction(SIGTERM,&sa,NULL);
 
     // Creating/OPening shared memory
         bool is_new =true;
@@ -150,7 +176,7 @@ int main(int argc,char * argv[]){
         }
       }
       else{
-            while(__atomic_load_n(&shared_data->initialized, __ATOMIC_ACQUIRE) == 0){
+            while(!stop &&__atomic_load_n(&shared_data->initialized, __ATOMIC_ACQUIRE) == 0){
                 // wait for initialization to complete
                 usleep(10000); // sleep for 10ms
             }
@@ -165,17 +191,27 @@ int main(int argc,char * argv[]){
         std::normal_distribution<double> distribution(mean,stddev);
     
         //Producer's job
-        while(true){
+        while(!stop){
             double price = distribution(gen);
             print_timestamp();
             std::cerr << commodity << ": generating a new value " << price << std::endl;
 
-            sem_wait(&shared_data->empty);
+            if(!wait_semaphore(&shared_data->empty)){
+            break;
+            }
 
             print_timestamp();
             std::cerr << commodity << ": trying to get mutex on the shared buffer "<< std::endl;
-            sem_wait(&shared_data->mutex);
+            if(!wait_semaphore(&shared_data->mutex)){
+                sem_post(&shared_data->empty);
+                break;
+            }
 
+            if(stop){
+                sem_post(&shared_data->mutex);
+                sem_post(&shared_data->empty);
+                break;
+            }
             //Adding price to buffer
 
             print_timestamp();
@@ -194,5 +230,12 @@ int main(int argc,char * argv[]){
             usleep(sleep_interval *1000);
         }
 
+        std::cout << "\nProducer is shutting down" << std::endl;
+    if(munmap(ptr,size_of_shm)==-1){
+        perror("munmap");
+        return 0;
+    }
 
+    std::cout<< "Producer exited" <<std::endl;
+    return 0;
 }

@@ -8,8 +8,11 @@
 # include <cstdlib>
 # include <cerrno>
 # include <cstdio>
+# include <csignal>
 
 #define NUM_COMMODITIES 11
+
+volatile sig_atomic_t stop =0;
 
 typedef struct {
     char commodity[11];
@@ -26,6 +29,9 @@ typedef struct {
     sem_t full;
 } Shared_Data;
 
+void signal_handler(int signal){
+    stop=1;
+}
 bool initialize_shm(Shared_Data * shared_data,int N){
     shared_data->initialized = 0;
     shared_data->in =0;
@@ -45,6 +51,21 @@ bool initialize_shm(Shared_Data * shared_data,int N){
     }
     __atomic_store_n(&shared_data->initialized, 1, __ATOMIC_RELEASE); // ensures no producer will see that initialized is 1 before consumer fifnish initializing
     return true;
+}
+
+bool wait_semaphore(sem_t *sem){
+    while(sem_wait(sem)==-1){
+        if(errno==EINTR){
+            if(stop){
+                return false;
+            }
+            continue;
+        }
+
+        perror("sem_wait");
+        return false;
+    }
+     return true;
 }
 
 const char* commodities[NUM_COMMODITIES] = {
@@ -146,6 +167,13 @@ int main(int argc, char *argv[]){
         return 1;
     }
 
+    struct sigaction sa ={};
+    sa.sa_handler= signal_handler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    sigaction(SIGINT,&sa,NULL);
+    sigaction(SIGTERM,&sa,NULL);
+
     bool is_new =true;
     int fd = shm_open("/my_shm",O_CREAT | O_RDWR | O_EXCL, 0666);
     if (fd == -1) {
@@ -209,9 +237,9 @@ int main(int argc, char *argv[]){
         }
       }
       else{
-            while(__atomic_load_n(&shared_data->initialized, __ATOMIC_ACQUIRE) == 0){
+            while(!stop &&__atomic_load_n(&shared_data->initialized, __ATOMIC_ACQUIRE) == 0){
                 // wait for initialization to complete
-                usleep(10000); // sleep for 10ms
+                usleep(10000); 
             }
         }
 
@@ -238,9 +266,20 @@ int main(int argc, char *argv[]){
     arrow_avg[i] = "";
     }
 
-    while(true){
-        sem_wait(&shared_data->full);
-        sem_wait(&shared_data->mutex);
+    while(!stop){
+        if(!wait_semaphore(&shared_data->full)){
+            break;
+        }
+        if(!wait_semaphore(&shared_data->mutex)){
+            sem_post(&shared_data->full);
+            break;
+        }
+
+        if(stop){
+            sem_post(&shared_data->mutex);
+            sem_post(&shared_data->full);
+            break;
+        }
 
         // REad from buffer
         Price_Update item = buffer[shared_data->out];
@@ -279,4 +318,11 @@ int main(int argc, char *argv[]){
 
     }
 
+    std::cout << "\nConsumer is shutting down" << std::endl;
+    if(munmap(ptr,size_of_shm)==-1){
+        perror("munmap");
+        return 0;
+    }
+
+    std::cout<< "Consumer exited" <<std::endl;
 }
