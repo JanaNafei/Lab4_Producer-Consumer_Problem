@@ -25,6 +25,7 @@ typedef struct {
     int in;
     int out;
     int initialized; 
+    int active_processes;
     sem_t mutex;
     sem_t empty;
     sem_t full;
@@ -49,10 +50,23 @@ bool wait_semaphore(sem_t *sem){
      return true;
 }
 
+bool wait_semaphore_cleanup(sem_t *sem){
+    while(sem_wait(sem)==-1){
+        if(errno==EINTR){
+            continue;
+        }
+
+        perror("sem_wait");
+        return false;
+    }
+     return true;
+}
+
 bool initialize_shm(Shared_Data * shared_data,int N){
     shared_data->initialized = 0;
     shared_data->in =0;
     shared_data->out =0;
+    shared_data->active_processes=0;
     shared_data->buffersize = N;
     if(sem_init(&shared_data->mutex,1,1)== -1){
         perror("sem_init mutex");
@@ -181,6 +195,18 @@ int main(int argc,char * argv[]){
                 usleep(10000); // sleep for 10ms
             }
         }  
+        if(stop){
+            munmap(ptr,size_of_shm);
+            return 0;
+        }
+
+        if(!wait_semaphore(&shared_data->mutex)){
+            munmap(ptr,size_of_shm);
+            return 1;
+        }
+        shared_data->active_processes++;
+        std::cout << "Registered. Active processes: "<< shared_data->active_processes << std::endl;
+        sem_post(&shared_data->mutex);
 
         //getting actual buffer address
     Price_Update *buffer =(Price_Update*)((char*)ptr +sizeof(Shared_Data));
@@ -231,6 +257,24 @@ int main(int argc,char * argv[]){
         }
 
         std::cout << "\nProducer is shutting down" << std::endl;
+
+        bool last=false;
+
+    if(wait_semaphore_cleanup(&shared_data->mutex)){ //used a seperate wait function that does not depend on stop
+        shared_data->active_processes--;
+        std::cout << "Remaining active processes: "<< shared_data->active_processes << std::endl;
+        if(shared_data->active_processes == 0){
+            last=true;
+        }
+        sem_post(&shared_data->mutex);
+    }
+    if(last){
+        std::cout <<"\nAll processes exited.Cleaning up..."<< std::endl;
+        sem_destroy(&shared_data->mutex);
+        sem_destroy(&shared_data->empty);
+        sem_destroy(&shared_data->full);
+        shm_unlink("/my_shm");
+    }
     if(munmap(ptr,size_of_shm)==-1){
         perror("munmap");
         return 0;

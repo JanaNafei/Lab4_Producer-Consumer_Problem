@@ -1,3 +1,4 @@
+all: producer consumer
 producer: producer.cpp
 		g++ -std=c++11 producer.cpp -o producer -pthread
 consumer: consumer.cpp
